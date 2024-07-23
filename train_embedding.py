@@ -237,7 +237,7 @@ class ColorJitter(object):
 class CholecDataset(Dataset):
     def __init__(self, file_paths, file_labels, transform=None, loader=pil_loader):
         self.file_paths = file_paths
-        self.file_labels_phase = file_labels[:, 0]
+        self.file_labels_phase = file_labels
         self.transform = transform
         self.loader = loader
 
