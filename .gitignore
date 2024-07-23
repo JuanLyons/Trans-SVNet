@@ -1,2 +1,5 @@
 *.pkl
 best_model/
+runs/
+tecno.sh
+__pycache__/

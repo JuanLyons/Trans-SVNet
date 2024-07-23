@@ -29,16 +29,16 @@ parser.add_argument(
     "-g", "--gpu", default=True, type=bool, help="gpu use, default True"
 )
 parser.add_argument(
-    "-s", "--seq", default=1, type=int, help="sequence length, default 10"
+    "-s", "--seq", default=1, type=int, help="sequence length, default 1"
 )
 parser.add_argument(
-    "-t", "--train", default=100, type=int, help="train batch size, default 400"
+    "-t", "--train", default=100, type=int, help="train batch size, default 100"
 )
 parser.add_argument(
-    "-v", "--val", default=100, type=int, help="valid batch size, default 10"
+    "-v", "--val", default=100, type=int, help="valid batch size, default 100"
 )
 parser.add_argument(
-    "-o", "--opt", default=0, type=int, help="0 for sgd 1 for adam, default 1"
+    "-o", "--opt", default=0, type=int, help="0 for sgd 1 for adam, default 0"
 )
 parser.add_argument(
     "-m",
@@ -48,13 +48,13 @@ parser.add_argument(
     help="0 for single opt, 1 for multi opt, default 1",
 )
 parser.add_argument(
-    "-e", "--epo", default=20, type=int, help="epochs to train and val, default 25"
+    "-e", "--epo", default=20, type=int, help="epochs to train and val, default 20"
 )
 parser.add_argument(
-    "-w", "--work", default=8, type=int, help="num of workers to use, default 4"
+    "-w", "--work", default=8, type=int, help="num of workers to use, default 8"
 )
 parser.add_argument(
-    "-f", "--flip", default=1, type=int, help="0 for not flip, 1 for flip, default 0"
+    "-f", "--flip", default=1, type=int, help="0 for not flip, 1 for flip, default 1"
 )
 parser.add_argument(
     "-c",
@@ -68,13 +68,13 @@ parser.add_argument(
     "--lr",
     default=5e-4,
     type=float,
-    help="learning rate for optimizer, default 5e-5",
+    help="learning rate for optimizer, default 5e-4",
 )
 parser.add_argument(
     "--momentum", default=0.9, type=float, help="momentum for sgd, default 0.9"
 )
 parser.add_argument(
-    "--weightdecay", default=5e-4, type=float, help="weight decay for sgd, default 0"
+    "--weightdecay", default=5e-4, type=float, help="weight decay for sgd, default 5e-4"
 )
 parser.add_argument(
     "--dampening", default=0, type=float, help="dampening for sgd, default 0"
@@ -312,26 +312,18 @@ def get_data(data_path):
     train_num_each_80 = train_test_paths_labels[4]
     val_num_each_80 = train_test_paths_labels[5]
 
-    test_paths_80 = train_test_paths_labels[6]
-    test_labels_80 = train_test_paths_labels[7]
-    test_num_each_80 = train_test_paths_labels[8]
-
     # print('train_paths_19  : {:6d}'.format(len(train_paths_19)))
     # print('train_labels_19 : {:6d}'.format(len(train_labels_19)))
     print("train_paths_80  : {:6d}".format(len(train_paths_80)))
     print("train_labels_80 : {:6d}".format(len(train_labels_80)))
     print("valid_paths_80  : {:6d}".format(len(val_paths_80)))
     print("valid_labels_80 : {:6d}".format(len(val_labels_80)))
-    print("test_paths_80  : {:6d}".format(len(test_paths_80)))
-    print("test_labels_80 : {:6d}".format(len(test_labels_80)))
 
     # train_labels_19 = np.asarray(train_labels_19, dtype=np.int64)
     train_labels_80 = np.asarray(train_labels_80, dtype=np.int64)
     val_labels_80 = np.asarray(val_labels_80, dtype=np.int64)
-    test_labels_80 = np.asarray(test_labels_80, dtype=np.int64)
 
     train_transforms = None
-    test_transforms = None
 
     if use_flip == 0:
         train_transforms = transforms.Compose(
@@ -447,15 +439,12 @@ def get_data(data_path):
     # train_dataset_19 = CholecDataset(train_paths_19, train_labels_19, train_transforms)
     train_dataset_80 = CholecDataset(train_paths_80, train_labels_80, train_transforms)
     val_dataset_80 = CholecDataset(val_paths_80, val_labels_80, test_transforms)
-    test_dataset_80 = CholecDataset(test_paths_80, test_labels_80, test_transforms)
 
     return (
         train_dataset_80,
         train_num_each_80,
         val_dataset_80,
         val_num_each_80,
-        test_dataset_80,
-        test_num_each_80,
     )
 
 
@@ -511,24 +500,21 @@ def train_model(train_dataset, train_num_each, val_dataset, val_num_each):
     (
         (train_dataset_80),
         (train_num_each_80),
-        (val_dataset, test_dataset),
-        (val_num_each, test_num_each),
+        (val_dataset),
+        (val_num_each),
     ) = (train_dataset, train_num_each, val_dataset, val_num_each)
 
     # train_useful_start_idx_19 = get_useful_start_idx(sequence_length, train_num_each_19)
     train_useful_start_idx_80 = get_useful_start_idx(sequence_length, train_num_each_80)
     val_useful_start_idx = get_useful_start_idx(sequence_length, val_num_each)
-    test_useful_start_idx = get_useful_start_idx(sequence_length, test_num_each)
 
     # num_train_we_use_19 = len(train_useful_start_idx_19)
     num_train_we_use_80 = len(train_useful_start_idx_80)
     num_val_we_use = len(val_useful_start_idx)
-    num_test_we_use = len(test_useful_start_idx)
 
     # train_we_use_start_idx_19 = train_useful_start_idx_19
     train_we_use_start_idx_80 = train_useful_start_idx_80
     val_we_use_start_idx = val_useful_start_idx
-    test_we_use_start_idx = test_useful_start_idx
 
     #    np.random.seed(0)
     # np.random.shuffle(train_we_use_start_idx)
@@ -542,36 +528,13 @@ def train_model(train_dataset, train_num_each, val_dataset, val_num_each):
         for j in range(sequence_length):
             val_idx.append(val_we_use_start_idx[i] + j)
 
-    test_idx = []
-    for i in range(num_test_we_use):
-        for j in range(sequence_length):
-            test_idx.append(test_we_use_start_idx[i] + j)
-
     num_train_all = len(train_idx)
     num_val_all = len(val_idx)
-    num_test_all = len(test_idx)
 
     # print('num train start idx 19: {:6d}'.format(len(train_useful_start_idx_19)))
     print("num train start idx 80: {:6d}".format(len(train_useful_start_idx_80)))
     print("num of all train use: {:6d}".format(num_train_all))
     print("num of all valid use: {:6d}".format(num_val_all))
-    print("num of all test use: {:6d}".format(num_test_all))
-
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=val_batch_size,
-        sampler=SeqSampler(val_dataset, val_idx),
-        num_workers=workers,
-        pin_memory=False,
-    )
-
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=val_batch_size,
-        sampler=SeqSampler(test_dataset, test_idx),
-        num_workers=workers,
-        pin_memory=False,
-    )
 
     model = resnet_lstm()
 
@@ -763,6 +726,14 @@ def train_model(train_dataset, train_num_each, val_dataset, val_num_each):
         val_all_preds_phase = []
         val_all_labels_phase = []
 
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=val_batch_size,
+            sampler=SeqSampler(val_dataset, val_idx),
+            num_workers=workers,
+            pin_memory=False,
+        )
+
         with torch.no_grad():
             for data in val_loader:
                 if use_gpu:
@@ -810,7 +781,6 @@ def train_model(train_dataset, train_num_each, val_dataset, val_num_each):
                         ),
                         end="\r",
                     )
-
         val_elapsed_time = time.time() - val_start_time
         val_accuracy_phase = float(val_corrects_phase) / float(num_val_we_use)
         val_average_loss_phase = val_loss_phase / num_val_we_use
@@ -838,65 +808,6 @@ def train_model(train_dataset, train_num_each, val_dataset, val_num_each):
             "validation loss epoch phase", float(val_average_loss_phase), epoch
         )
 
-        test_loss_phase = 0.0
-        test_corrects_phase = 0
-        test_start_time = time.time()
-        test_progress = 0
-        test_all_preds_phase = []
-        test_all_labels_phase = []
-
-        with torch.no_grad():
-            for data in test_loader:
-                if use_gpu:
-                    inputs, labels_phase = data[0].to(device), data[1].to(device)
-                else:
-                    inputs, labels_phase = data[0], data[1]
-
-                labels_phase = labels_phase[(sequence_length - 1) :: sequence_length]
-
-                inputs = inputs.view(-1, sequence_length, 3, 224, 224)
-                outputs_phase = model.forward(inputs)
-                outputs_phase = outputs_phase[sequence_length - 1 :: sequence_length]
-
-                _, preds_phase = torch.max(outputs_phase.data, 1)
-                loss_phase = criterion_phase(outputs_phase, labels_phase)
-
-                test_loss_phase += loss_phase.data.item()
-
-                test_corrects_phase += torch.sum(preds_phase == labels_phase.data)
-                # TODO
-
-                for i in range(len(preds_phase)):
-                    test_all_preds_phase.append(int(preds_phase.data.cpu()[i]))
-                for i in range(len(labels_phase)):
-                    test_all_labels_phase.append(int(labels_phase.data.cpu()[i]))
-
-                test_progress += 1
-                if test_progress * val_batch_size >= num_test_all:
-                    percent = 100.0
-                    print(
-                        "test progress: %s [%d/%d]"
-                        % (str(percent) + "%", num_test_all, num_test_all),
-                        end="\n",
-                    )
-                else:
-                    percent = round(
-                        test_progress * val_batch_size / num_test_all * 100, 2
-                    )
-                    print(
-                        "test progress: %s [%d/%d]"
-                        % (
-                            str(percent) + "%",
-                            test_progress * val_batch_size,
-                            num_test_all,
-                        ),
-                        end="\r",
-                    )
-
-        test_elapsed_time = time.time() - test_start_time
-        test_accuracy_phase = float(test_corrects_phase) / float(num_test_we_use)
-        test_average_loss_phase = test_loss_phase / num_test_we_use
-
         print(
             "epoch: {:4d}"
             " train in: {:2.0f}m{:2.0f}s"
@@ -904,10 +815,7 @@ def train_model(train_dataset, train_num_each, val_dataset, val_num_each):
             " train accu(phase): {:.4f}"
             " valid in: {:2.0f}m{:2.0f}s"
             " valid loss(phase): {:4.4f}"
-            " valid accu(phase): {:.4f}"
-            " test in: {:2.0f}m{:2.0f}s"
-            " test loss(phase): {:4.4f}"
-            " test accu(phase): {:.4f}".format(
+            " valid accu(phase): {:.4f}".format(
                 epoch,
                 train_elapsed_time // 60,
                 train_elapsed_time % 60,
@@ -917,10 +825,6 @@ def train_model(train_dataset, train_num_each, val_dataset, val_num_each):
                 val_elapsed_time % 60,
                 val_average_loss_phase,
                 val_accuracy_phase,
-                test_elapsed_time // 60,
-                test_elapsed_time % 60,
-                test_average_loss_phase,
-                test_accuracy_phase,
             )
         )
 
@@ -939,18 +843,15 @@ def train_model(train_dataset, train_num_each, val_dataset, val_num_each):
         if val_accuracy_phase > best_val_accuracy_phase:
             best_val_accuracy_phase = val_accuracy_phase
             correspond_train_acc_phase = train_accuracy_phase
-            correspond_test_acc_phase = test_accuracy_phase
             best_model_wts = copy.deepcopy(model.module.state_dict())
             best_epoch = epoch
         if val_accuracy_phase == best_val_accuracy_phase:
             if train_accuracy_phase > correspond_train_acc_phase:
                 correspond_train_acc_phase = train_accuracy_phase
-                correspond_test_acc_phase = test_accuracy_phase
                 best_model_wts = copy.deepcopy(model.module.state_dict())
                 best_epoch = epoch
 
         save_val_phase = int("{:4.0f}".format(best_val_accuracy_phase * 10000))
-        save_test_phase = int("{:4.0f}".format(correspond_test_acc_phase * 10000))
         save_train_phase = int("{:4.0f}".format(correspond_train_acc_phase * 10000))
         base_name = (
             "resnetfc_ce"
@@ -972,8 +873,6 @@ def train_model(train_dataset, train_num_each, val_dataset, val_num_each):
             + str(save_train_phase)
             + "_val_"
             + str(save_val_phase)
-            + "_test_"
-            + str(save_test_phase)
         )
         torch.save(best_model_wts, "./best_model/emd_lr5e-4/" + base_name + ".pth")
         print("best_epoch", str(best_epoch))
@@ -983,20 +882,17 @@ def train_model(train_dataset, train_num_each, val_dataset, val_num_each):
 
 def main():
     # train_dataset_19, train_num_each_19, \
-    breakpoint()
     (
         train_dataset_80,
         train_num_each_80,
         val_dataset_80,
         val_num_each_80,
-        test_dataset_80,
-        test_num_each_80,
     ) = get_data("./train_val_paths_labels1.pkl")
     train_model(
         (train_dataset_80),
         (train_num_each_80),
-        (val_dataset_80, test_dataset_80),
-        (val_num_each_80, test_num_each_80),
+        (val_dataset_80),
+        (val_num_each_80),
     )
 
 

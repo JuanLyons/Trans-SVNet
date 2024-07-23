@@ -1,6 +1,6 @@
 # some code adapted from https://github.com/YuemingJin/MTRCNet-CL
 # and https://github.com/YuemingJin/TMRNet
-
+import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -24,22 +24,6 @@ import numbers
 from torch.utils.tensorboard import SummaryWriter
 from sklearn import metrics
 
-# from NLBlock import NLBlockimport os, subprocess
-import os, subprocess
-
-os.environ["CUDA_VISIBLE_DEVICES"] = str(
-    np.argmax(
-        [
-            int(x.split()[2])
-            for x in subprocess.Popen(
-                "nvidia-smi -q -d Memory | grep -A4 GPU | grep Free",
-                shell=True,
-                stdout=subprocess.PIPE,
-            ).stdout.readlines()
-        ]
-    )
-)
-
 parser = argparse.ArgumentParser(description="lstm training")
 parser.add_argument(
     "-g", "--gpu", default=True, type=bool, help="gpu use, default True"
@@ -51,7 +35,7 @@ parser.add_argument(
     "-t", "--train", default=400, type=int, help="train batch size, default 400"
 )
 parser.add_argument(
-    "-v", "--val", default=400, type=int, help="valid batch size, default 10"
+    "-v", "--val", default=400, type=int, help="valid batch size, default 400"
 )
 parser.add_argument(
     "-o", "--opt", default=0, type=int, help="0 for sgd 1 for adam, default 1"
@@ -67,10 +51,10 @@ parser.add_argument(
     "-e", "--epo", default=25, type=int, help="epochs to train and val, default 25"
 )
 parser.add_argument(
-    "-w", "--work", default=8, type=int, help="num of workers to use, default 4"
+    "-w", "--work", default=8, type=int, help="num of workers to use, default 8"
 )
 parser.add_argument(
-    "-f", "--flip", default=1, type=int, help="0 for not flip, 1 for flip, default 0"
+    "-f", "--flip", default=1, type=int, help="0 for not flip, 1 for flip, default 1"
 )
 parser.add_argument(
     "-c",
@@ -84,13 +68,13 @@ parser.add_argument(
     "--lr",
     default=5e-7,
     type=float,
-    help="learning rate for optimizer, default 5e-5",
+    help="learning rate for optimizer, default 5e-7",
 )
 parser.add_argument(
     "--momentum", default=0.9, type=float, help="momentum for sgd, default 0.9"
 )
 parser.add_argument(
-    "--weightdecay", default=5e-4, type=float, help="weight decay for sgd, default 0"
+    "--weightdecay", default=5e-4, type=float, help="weight decay for sgd, default 5e-4"
 )
 parser.add_argument(
     "--dampening", default=0, type=float, help="dampening for sgd, default 0"
@@ -369,16 +353,11 @@ def get_data(data_path):
     train_num_each_80 = train_test_paths_labels[4]
     val_num_each_80 = train_test_paths_labels[5]
 
-    test_paths_80 = train_test_paths_labels[6]
-    test_labels_80 = train_test_paths_labels[7]
-    test_num_each_80 = train_test_paths_labels[8]
-
     print("train_paths_80  : {:6d}".format(len(train_paths_80)))
     print("train_labels_80 : {:6d}".format(len(train_labels_80)))
 
     train_labels_80 = np.asarray(train_labels_80, dtype=np.int64)
     val_labels_80 = np.asarray(val_labels_80, dtype=np.int64)
-    test_labels_80 = np.asarray(test_labels_80, dtype=np.int64)
 
     train_transforms = None
     test_transforms = None
@@ -499,15 +478,12 @@ def get_data(data_path):
         train_paths_80, train_labels_80, test_transforms
     )
     val_dataset_80 = CholecDataset(val_paths_80, val_labels_80, test_transforms)
-    test_dataset_80 = CholecDataset(test_paths_80, test_labels_80, test_transforms)
 
     return (
         (train_dataset_80, train_dataset_80_LFB),
         train_num_each_80,
         val_dataset_80,
         val_num_each_80,
-        test_dataset_80,
-        test_num_each_80,
     )
 
 
@@ -531,14 +507,13 @@ sig_f = nn.Sigmoid()
 
 g_LFB_train = np.zeros(shape=(0, 2048))
 g_LFB_val = np.zeros(shape=(0, 2048))
-g_LFB_test = np.zeros(shape=(0, 2048))
 
 
 def train_model(train_dataset, train_num_each, val_dataset, val_num_each):
     # TensorBoard
     writer = SummaryWriter("runs/non-local/pretrained_lr5e-7_L40_2fc_copy/")
 
-    (train_num_each_80), (val_dataset, test_dataset), (val_num_each, test_num_each) = (
+    (train_num_each_80), (val_dataset), (val_num_each) = (
         train_num_each,
         val_dataset,
         val_num_each,
@@ -548,29 +523,23 @@ def train_model(train_dataset, train_num_each, val_dataset, val_num_each):
 
     train_useful_start_idx_80 = get_useful_start_idx(sequence_length, train_num_each_80)
     val_useful_start_idx = get_useful_start_idx(sequence_length, val_num_each)
-    test_useful_start_idx = get_useful_start_idx(sequence_length, test_num_each)
 
     train_useful_start_idx_80_LFB = get_useful_start_idx_LFB(
         sequence_length, train_num_each_80
     )
     val_useful_start_idx_LFB = get_useful_start_idx_LFB(sequence_length, val_num_each)
-    test_useful_start_idx_LFB = get_useful_start_idx_LFB(sequence_length, test_num_each)
 
     num_train_we_use_80 = len(train_useful_start_idx_80)
     num_val_we_use = len(val_useful_start_idx)
-    num_test_we_use = len(test_useful_start_idx)
 
     num_train_we_use_80_LFB = len(train_useful_start_idx_80_LFB)
     num_val_we_use_LFB = len(val_useful_start_idx_LFB)
-    num_test_we_use_LFB = len(test_useful_start_idx_LFB)
 
     train_we_use_start_idx_80 = train_useful_start_idx_80
     val_we_use_start_idx = val_useful_start_idx
-    test_we_use_start_idx = test_useful_start_idx
 
     train_we_use_start_idx_80_LFB = train_useful_start_idx_80_LFB
     val_we_use_start_idx_LFB = val_useful_start_idx_LFB
-    test_we_use_start_idx_LFB = test_useful_start_idx_LFB
 
     #    np.random.seed(0)
     # np.random.shuffle(train_we_use_start_idx)
@@ -584,11 +553,6 @@ def train_model(train_dataset, train_num_each, val_dataset, val_num_each):
         for j in range(sequence_length):
             val_idx.append(val_we_use_start_idx[i] + j)
 
-    test_idx = []
-    for i in range(num_test_we_use):
-        for j in range(sequence_length):
-            test_idx.append(test_we_use_start_idx[i] + j)
-
     train_idx_LFB = []
     for i in range(num_train_we_use_80_LFB):
         for j in range(sequence_length):
@@ -599,11 +563,6 @@ def train_model(train_dataset, train_num_each, val_dataset, val_num_each):
         for j in range(sequence_length):
             val_idx_LFB.append(val_we_use_start_idx_LFB[i] + j)
 
-    test_idx_LFB = []
-    for i in range(num_test_we_use_LFB):
-        for j in range(sequence_length):
-            test_idx_LFB.append(test_we_use_start_idx_LFB[i] + j)
-
     dict_index, dict_value = zip(*list(enumerate(train_we_use_start_idx_80_LFB)))
     dict_train_start_idx_LFB = dict(zip(dict_value, dict_index))
 
@@ -612,18 +571,15 @@ def train_model(train_dataset, train_num_each, val_dataset, val_num_each):
 
     num_train_all = len(train_idx)
     num_val_all = len(val_idx)
-    num_test_all = len(test_idx)
 
     print("num train start idx 80: {:6d}".format(len(train_useful_start_idx_80)))
     print("num of all train use: {:6d}".format(num_train_all))
     print("num of all valid use: {:6d}".format(num_val_all))
-    print("num of all test use: {:6d}".format(num_test_all))
     print("num of all train LFB use: {:6d}".format(len(train_idx_LFB)))
     print("num of all valid LFB use: {:6d}".format(len(val_idx_LFB)))
 
     global g_LFB_train
     global g_LFB_val
-    global g_LFB_test
     print("loading features!>.........")
 
     if not load_exist_LFB:
@@ -643,19 +599,12 @@ def train_model(train_dataset, train_num_each, val_dataset, val_num_each):
             pin_memory=False,
         )
 
-        test_feature_loader = DataLoader(
-            test_dataset,
-            batch_size=val_batch_size,
-            sampler=SeqSampler(test_dataset, test_idx_LFB),
-            num_workers=workers,
-            pin_memory=False,
-        )
-
         model_LFB = resnet_lstm()
 
         model_LFB.load_state_dict(
             torch.load(
-                "./best_model/emd_lr5e-4/resnetfc_ce_epoch_15_length_1_opt_0_mulopt_1_flip_1_crop_1_batch_100_train_9946_val_8404_test_7961.pth"
+                # "./best_model/emd_lr5e-4/resnetfc_ce_epoch_15_length_1_opt_0_mulopt_1_flip_1_crop_1_batch_100_train_9946_val_8404_test_7961.pth"
+                "./best_model/emd_lr5e-4/resnetfc_ce_epoch_12_length_1_opt_0_mulopt_1_flip_1_crop_1_batch_100_train_9976_val_8900.pth"
             ),
             strict=False,
         )
@@ -705,33 +654,20 @@ def train_model(train_dataset, train_num_each, val_dataset, val_num_each):
                 g_LFB_val = np.concatenate((g_LFB_val, outputs_feature), axis=0)
 
                 print("val feature length:", len(g_LFB_val))
-            #'''
-            for data in test_feature_loader:
-                if use_gpu:
-                    inputs, labels_phase = data[0].to(device), data[1].to(device)
-                else:
-                    inputs, labels_phase = data[0], data[1]
-
-                inputs = inputs.view(-1, sequence_length, 3, 224, 224)
-                outputs_feature = model_LFB.forward(inputs).data.cpu().numpy()
-
-                g_LFB_test = np.concatenate((g_LFB_test, outputs_feature), axis=0)
-
-                print("test feature length:", len(g_LFB_test))
 
         print("finish!")
         g_LFB_train = np.array(g_LFB_train)
         g_LFB_val = np.array(g_LFB_val)
-        g_LFB_test = np.array(g_LFB_test)
         #'''
+
+        os.makedirs("LFB", exist_ok=True)
+
         with open("./LFB/g_LFB50_train0.pkl", "wb") as f:
             pickle.dump(g_LFB_train, f)
 
         with open("./LFB/g_LFB50_val0.pkl", "wb") as f:
             pickle.dump(g_LFB_val, f)
         #'''
-        with open("./LFB/g_LFB50_test0.pkl", "wb") as f:
-            pickle.dump(g_LFB_test, f)
 
 
 def main():
@@ -740,14 +676,12 @@ def main():
         train_num_each_80,
         val_dataset,
         val_num_each,
-        test_dataset,
-        test_num_each,
     ) = get_data("./train_val_paths_labels1.pkl")
     train_model(
         (train_dataset_80),
         (train_num_each_80),
-        (val_dataset, test_dataset),
-        (val_num_each, test_num_each),
+        (val_dataset),
+        (val_num_each),
     )
 
 
